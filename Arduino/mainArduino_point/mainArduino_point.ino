@@ -19,12 +19,14 @@ TFMPlus tfmP;         // Create a TFMini Plus object
 #define sm2_pin3 8
 #define sm2_pin4 9
 
-#define aroundInterval 4096  // 바퀴가 두 바퀴 도는 스텝
-#define turnInterval 4300 // 자체가 한바퀴 도는 스텝 (바퀴가 2바퀴 도는 스텝 + 오차 204)
-#define LIDARDATASIZE 10      // 4300 / 10 = 430개의 데이터 수집 (1회전 당)
+#define btn_pin 10
 
-char ssid[] = "AndroidHotspot2409";            // your network SSID (name)
-char pass[] = "12345678";        // your network password
+#define aroundInterval 4096  // 바퀴가 두 바퀴 도는 스텝
+#define turnInterval 4700 // 차체가 한바퀴 도는 스텝 
+#define LIDARDATASIZE 10      // 4800 / 10 = 480개의 데이터 수집 (1회전 당)
+
+char ssid[] = "DTNLAB";            // your network SSID (name)
+char pass[] = "pnudtn6519!";        // your network password
 int status = WL_IDLE_STATUS;     // the Wifi radio's status
 //char server[] = "13.125.205.44";  // server IP address
 //int server_port = 3000;           // server port number
@@ -54,6 +56,7 @@ void setup() {
   pinMode(BLUE_PIN, OUTPUT);
   pinMode(GREEN_PIN, OUTPUT);
   pinMode(RED_PIN, OUTPUT);
+  pinMode(btn_pin, INPUT);
 
   LedBlue();
   delay(50);
@@ -115,7 +118,18 @@ void setup() {
   else tfmP.printReply();
 
   start_count = 0;
-  delay(1000);
+
+  // 버튼 클릭 시 서버변수 초기화
+  while(true) {
+    if(digitalRead(btn_pin)){
+      SendDataWeb("{\"LidarData\": [-1]}");
+      Serial.println("Inti server data and Start service");
+      LedGreen();
+      delay(2000);
+      LedStop();
+      break;
+    }
+  }
 }
 
 int cur_x = 0; int cur_y = 0;
@@ -211,8 +225,8 @@ void SendDataWeb(const String& jsonstr){
     
     // Make a HTTP request
     client.print(F("POST /default/send HTTP/1.1\r\n"));
-    client.print(F("Content-Type: application/json\r\n"));
     client.print(F("Host: 12.153.143.250:8000\r\n" ));
+    client.print(F("Content-Type: application/json\r\n"));
     client.print(F("Content-Length: "));
     client.println(jsonstr.length());
     client.println();
@@ -247,7 +261,7 @@ void LidarDetectAround(String& jsonstr){
   int Count = 0, dataCount = 0;
   int lidarInterval = LIDARDATASIZE;
   while(true){
-    if(Count >= turnInterval) break; // 오차 : 204 = 4300
+    if(Count >= turnInterval) break;
     if(Count % lidarInterval == 0){
       int currentDist = getDataLidar();
       LidarData[dataCount] = currentDist;
@@ -269,6 +283,7 @@ void goNextPoint(){
   nt_y -= cur_y;
   
   float degree = degrees(atan(float(nt_y) / nt_x));
+  if(degree < 0) degree += 360;
   Serial.print("degree = ");
   Serial.println(degree);
   int nt_rot = int(degree * turnInterval / 360); 
@@ -287,7 +302,7 @@ void goNextPoint(){
 
   // 이동
   Count = 0;
-  unsigned long step_dist = nt_dist * int(aroundInterval / 42);
+  unsigned long step_dist = nt_dist * int(aroundInterval / 44);
   Serial.print("step nt_dist = ");
   Serial.println(step_dist);
   while(true){
@@ -297,8 +312,10 @@ void goNextPoint(){
     Go();
   }
 
-  cur_x += nt_x;
-  cur_y += nt_y;
+  nt_x += cur_x;
+  nt_y += cur_y;
+  cur_x = nt_x;
+  cur_y = nt_y;
 
   // 이동 후 방위각 90도로 다시 돌아옴
   Count = 0;
